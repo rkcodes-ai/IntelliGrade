@@ -66,7 +66,7 @@ RUN npm run build --workspace=frontend
 # what actually terminates port 80/443 and forwards to this container's
 # 8080 — this image never needs a privileged port itself.
 # ============================================================
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS production
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS production
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
