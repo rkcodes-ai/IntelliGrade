@@ -36,8 +36,8 @@ dependencies = [
     "google-cloud-vision>=3.7.0", # Module 12: Google Cloud Vision adapter
     "azure-ai-documentintelligence>=1.0.0", # Module 12: Azure Document Intelligence adapter
     "easyocr>=1.7.1", # Module 12: EasyOCR adapter (torch-backed; see docs/ocr-pipeline-guide.md re: Windows Smart App Control)
-    "torch==2.9.0", # pinned (Step 4.2 milestone): letting pip pick "latest" independently resolved torch==2.13.0 + torchvision==0.28.0, a genuinely broken pairing on this project's Python 3.14 venv (torchvision's compiled ops never registered -- "operator torchvision::nms does not exist", reproduced deterministically, confirmed NOT fixed by reinstalling either package alone) -- this exact pair is verified working via real EasyOCR inference
-    "torchvision==0.24.0", # see torch pin above -- same real incompatibility, same fix
+    "torch==2.13.0", # pinned (Step 4.2 milestone): letting pip pick "latest" independently resolved torch==2.13.0 + torchvision==0.28.0, a genuinely broken pairing on this project's Python 3.14 venv (torchvision's compiled ops never registered -- "operator torchvision::nms does not exist", reproduced deterministically, confirmed NOT fixed by reinstalling either package alone) -- this exact pair is verified working via real EasyOCR inference
+    "torchvision==0.28.0", # see torch pin above -- same real incompatibility, same fix
     "psutil>=6.0.0", # Module 12: benchmark module's CPU/memory sampling
     "openai>=1.50.0", # AI Reference Answer Builder milestone: real OpenAIProvider (evaluate + generate_reference)
     "anthropic>=0.34.0", # AI Reference Answer Builder milestone: real AnthropicProvider (evaluate + generate_reference)
