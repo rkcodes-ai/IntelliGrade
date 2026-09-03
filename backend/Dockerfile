@@ -14,7 +14,7 @@
 # ============================================================
 # Runtime base — packages every target below needs at RUN time only
 # ============================================================
-FROM python:3.13-slim AS runtime-base
+FROM python:3.14-slim AS runtime-base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
