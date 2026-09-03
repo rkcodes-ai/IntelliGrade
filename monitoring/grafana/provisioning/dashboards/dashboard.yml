@@ -1,0 +1,13 @@
+# Auto-provisions every dashboard JSON in monitoring/grafana/dashboards/ on
+# Grafana container start.
+apiVersion: 1
+
+providers:
+  - name: IntelliGrade
+    orgId: 1
+    folder: IntelliGrade
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --radius: 0.5rem;
+
+    /* Dashboard redesign (Module 11): additive semantic + dataviz tokens.
+       Nothing above this line was changed — existing pages/components that
+       only use border/background/foreground/primary/secondary/muted/
+       destructive/card are pixel-identical to before. */
+    --accent: 243 75% 96%;
+    --accent-foreground: 243 75% 40%;
+    --success: 158 64% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+    --info: 199 89% 45%;
+    --info-foreground: 0 0% 100%;
+    --ring: 243 75% 59%;
+
+    --chart-1: 243 75% 59%;
+    --chart-2: 199 89% 45%;
+    --chart-3: 158 64% 36%;
+    --chart-4: 32 95% 44%;
+    --chart-5: 280 65% 60%;
+
+    --shadow-color: 222 47% 11%;
+  }
+
+  .dark {
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 10%;
+    --card-foreground: 210 40% 98%;
+    --primary: 243 75% 65%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 20%;
+
+    --accent: 243 40% 18%;
+    --accent-foreground: 243 75% 80%;
+    --success: 158 64% 46%;
+    --success-foreground: 222 47% 7%;
+    --warning: 32 95% 58%;
+    --warning-foreground: 222 47% 7%;
+    --info: 199 89% 60%;
+    --info-foreground: 222 47% 7%;
+    --ring: 243 75% 65%;
+
+    --chart-1: 243 75% 68%;
+    --chart-2: 199 89% 60%;
+    --chart-3: 158 64% 50%;
+    --chart-4: 32 95% 58%;
+    --chart-5: 280 65% 70%;
+
+    --shadow-color: 0 0% 0%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer utilities {
+  /* Dashboard redesign (Module 11): subtle, reduced-motion-aware animation
+     utilities. Additive — no existing class names are redefined. */
+  .animate-fade-in {
+    animation: dashboard-fade-in 0.35s ease-out both;
+  }
+
+  .animate-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: dashboard-shimmer 1.6s ease-in-out infinite;
+  }
+
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px hsl(var(--shadow-color) / 0.04),
+      0 4px 16px hsl(var(--shadow-color) / 0.06);
+  }
+
+  .shadow-soft-lg {
+    box-shadow:
+      0 2px 4px hsl(var(--shadow-color) / 0.04),
+      0 12px 32px hsl(var(--shadow-color) / 0.09);
+  }
+}
+
+@keyframes dashboard-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashboard-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-shimmer {
+    animation: none;
+  }
+}

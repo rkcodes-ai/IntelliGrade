@@ -1,0 +1,139 @@
+# IntelliGrade local development stack.
+#
+# Usage:
+#   cp .env.example .env   # then edit as needed
+#   docker compose up -d
+#
+# All services default to the `development` Dockerfile target (hot reload).
+# Production images/targets are used by the deployment pipeline, not here.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intelligrade-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-intelligrade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-intelligrade}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-intelligrade}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intelligrade-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: intelligrade-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intelligrade-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: intelligrade-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-intelligrade}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_dev_only}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - intelligrade-network
+
+  backend:
+    build:
+      context: ./backend
+      target: development
+    container_name: intelligrade-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - intelligrade-network
+
+  frontend:
+    build:
+      # Root context required: this is an npm-workspaces monorepo and the
+      # lockfile lives at the repo root, not inside frontend/ — see the
+      # comment at the top of frontend/Dockerfile.
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: development
+    container_name: intelligrade-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      # node_modules lives at /app/node_modules (installed at the workspace
+      # root inside the image) while the dev server runs from
+      # /app/frontend — mounting only that subpath means the bind mount
+      # can't shadow the already-installed dependencies.
+      - ./frontend:/app/frontend
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - intelligrade-network
+
+networks:
+  intelligrade-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

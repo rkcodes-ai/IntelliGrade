@@ -1,0 +1,64 @@
+name: Lint
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  backend-lint:
+    name: Backend (black, isort, ruff, mypy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: black --check
+        run: black --check app tests alembic
+
+      - name: isort --check
+        run: isort --check-only app tests alembic
+
+      - name: ruff check
+        run: ruff check app tests alembic
+
+      - name: mypy
+        run: mypy app
+        continue-on-error: true # tightened once domain modules land
+
+  frontend-lint:
+    name: Frontend (ESLint, Prettier, tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      # Root install: the frontend is an npm workspace member sharing the
+      # repo-root lockfile — installing from the root keeps it in sync.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint --workspace=frontend
+
+      - name: Prettier --check
+        run: npm run format:check --workspace=frontend
+
+      - name: Type check
+        run: npm run typecheck --workspace=frontend

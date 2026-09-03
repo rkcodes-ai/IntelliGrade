@@ -1,0 +1,52 @@
+# Applies to root-context Docker builds (currently: frontend/Dockerfile,
+# which needs repo-root context for the shared npm-workspaces lockfile).
+# backend/Dockerfile has its own build context (./backend) governed by
+# backend/.dockerignore instead.
+
+# --- Backend (irrelevant to the frontend image) ---
+backend/
+
+# --- VCS / editor ---
+.git
+.github
+.vscode
+.idea
+
+# --- Node ---
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/coverage
+frontend/playwright-report
+frontend/test-results
+**/*.tsbuildinfo
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+!frontend/.env.example
+
+# --- Docs / misc (not needed inside the image) ---
+docs
+*.md
+!frontend/README.md
+
+# --- Other top-level module placeholders (not part of the frontend build) ---
+ai
+ocr
+evaluation
+analytics
+notification
+gateway
+shared
+infrastructure
+database
+configs
+monitoring
+storage
+scripts
+logs
+uploads
+backups
+docker

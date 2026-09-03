@@ -1,0 +1,119 @@
+name: Security
+
+# Module 08, Feature 12 (Security Hardening) + Feature 6 (CI/CD). Runs
+# independently of lint.yml/test.yml/build.yml/docker.yml so a
+# vulnerability finding never blocks routine merges by default (every job
+# reports via the Actions UI / SARIF upload; tightening any of them to a
+# hard-fail gate is a policy decision for whoever owns branch protection,
+# not something this workflow presumes).
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Weekly sweep — catches newly-disclosed CVEs in dependencies that
+    # haven't changed (so wouldn't otherwise trigger a PR/push run).
+    - cron: "0 6 * * 1"
+
+jobs:
+  secret-scan:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans full history, not just the diff
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-dependency-scan:
+    name: Backend dependency scan (pip-audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install package + pip-audit
+        run: |
+          pip install -e .
+          pip install pip-audit
+
+      - name: pip-audit
+        run: pip-audit --desc
+        continue-on-error: true # report-only until findings are triaged once
+
+  frontend-dependency-scan:
+    name: Frontend dependency scan (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high+critical)
+        run: npm audit --audit-level=high
+        continue-on-error: true # report-only until findings are triaged once
+
+  container-scan:
+    name: Container image scan (Trivy)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: backend
+            context: ./backend
+            dockerfile: backend/Dockerfile
+          - service: frontend
+            context: .
+            dockerfile: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} (production target, local load only)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: production
+          push: false
+          load: true
+          tags: intelligrade-${{ matrix.service }}:security-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: intelligrade-${{ matrix.service }}:security-scan
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0" # report-only until findings are triaged once
+
+      - name: Upload Trivy results to the Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}

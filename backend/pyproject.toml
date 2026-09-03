@@ -1,0 +1,212 @@
+[project]
+name = "intelligrade-backend"
+version = "1.0.1"
+description = "IntelliGrade AI Answer Script Evaluation System - Backend"
+requires-python = ">=3.13"
+readme = "README.md"
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "sqlalchemy>=2.0.32",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.2",
+    "redis>=5.0.8",
+    "celery>=5.4.0",
+    "minio>=7.2.7",
+    "bcrypt>=4.2.0", # used directly, not via passlib: passlib 1.7.4 (unmaintained) is broken against bcrypt>=4.1
+    "pyjwt>=2.9.0",
+    "python-multipart>=0.0.9",
+    "structlog>=24.4.0",
+    "slowapi>=0.1.9",
+    "python-dotenv>=1.0.1",
+    "email-validator>=2.2.0",
+    "pillow>=10.4.0",
+    "numpy>=2.1.0",
+    "opencv-python-headless>=4.10.0", # headless variant: no GUI/X11 deps, appropriate for a server backend
+    "pymupdf>=1.24.0", # PDF page rasterization; bundles MuPDF, no system poppler dependency
+    "pytesseract>=0.3.13", # thin wrapper around the tesseract-ocr system binary (see TESSERACT_CMD setting)
+    "scikit-learn>=1.5.0", # Module 06: TF-IDF + cosine similarity for the real (lexical/statistical) AI provider — no network/API-key dependency, see ADR-041
+    "reportlab>=4.2.0", # Module 07: real PDF report generation (student/question-wise/institution reports)
+    "openpyxl>=3.1.0", # Module 07: real Excel (.xlsx) report generation; CSV uses the stdlib csv module
+    "prometheus-fastapi-instrumentator>=7.0.0", # Module 08: real /metrics endpoint for Prometheus scraping
+    "boto3>=1.34.0", # Module 12: AWS Textract adapter
+    "google-cloud-vision>=3.7.0", # Module 12: Google Cloud Vision adapter
+    "azure-ai-documentintelligence>=1.0.0", # Module 12: Azure Document Intelligence adapter
+    "easyocr>=1.7.1", # Module 12: EasyOCR adapter (torch-backed; see docs/ocr-pipeline-guide.md re: Windows Smart App Control)
+    "torch==2.9.0", # pinned (Step 4.2 milestone): letting pip pick "latest" independently resolved torch==2.13.0 + torchvision==0.28.0, a genuinely broken pairing on this project's Python 3.14 venv (torchvision's compiled ops never registered -- "operator torchvision::nms does not exist", reproduced deterministically, confirmed NOT fixed by reinstalling either package alone) -- this exact pair is verified working via real EasyOCR inference
+    "torchvision==0.24.0", # see torch pin above -- same real incompatibility, same fix
+    "psutil>=6.0.0", # Module 12: benchmark module's CPU/memory sampling
+    "openai>=1.50.0", # AI Reference Answer Builder milestone: real OpenAIProvider (evaluate + generate_reference)
+    "anthropic>=0.34.0", # AI Reference Answer Builder milestone: real AnthropicProvider (evaluate + generate_reference)
+    "lark>=1.3.1", # Step 4 milestone: MIT licensed, zero transitive deps -- activates sympy.parsing.latex.parse_latex_lark for safe symbolic math comparison (see document_intelligence/math_recognition.py)
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.2",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.0",
+    "aiosqlite>=0.20.0", # test-only: in-memory SQLite DB for fast, isolated integration tests
+    "black>=24.4.2",
+    "ruff>=0.5.0",
+    "isort>=5.13.2",
+    "mypy>=1.11.0",
+]
+# Dev/ops load-testing tool only — never imported by application code, so
+# it's its own extra rather than folded into `dev` (CI's normal lint/test
+# jobs don't need it). See backend/loadtests/README.md.
+loadtest = ["locust>=2.31.0"]
+# Module 12: PaddleOCR/PaddlePaddle publish no wheel for this project's
+# Python 3.14 local dev interpreter (as of writing), so it's kept out of the
+# unconditional `dependencies` list to avoid breaking `pip install -e .` in
+# that environment. Installs cleanly with `pip install -e ".[paddleocr]"` on
+# this project's Python 3.13 Docker/CI target (see PaddlePaddle's published
+# wheel matrix) — see `app/services/ocr/providers/paddleocr_provider.py`.
+paddleocr = ["paddleocr>=2.7.0.3", "paddlepaddle>=2.6.0"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ==================================================
+# Black
+# ==================================================
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+include = '\.pyi?$'
+
+# ==================================================
+# isort
+# ==================================================
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["app"]
+skip = [".venv", "alembic/versions"]
+
+# ==================================================
+# Ruff
+# ==================================================
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "N"]
+ignore = ["B008"] # FastAPI's Depends() in defaults is idiomatic
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+# Settings properties intentionally mirror env-var-style UPPER_CASE naming.
+"app/core/config.py" = ["N802"]
+
+# ==================================================
+# Mypy
+# ==================================================
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+# `app/services/ocr/isolated_runners/` (Surya/docTR/TrOCR/PaddleOCR
+# isolated-runtime milestone) is excluded, not `ignore_missing_imports`-ed
+# like the overrides below: those scripts are never imported by this main
+# venv's code — they're standalone entry points executed by a *different*
+# Python interpreter (`.venv-surya`/`.venv-doctr`/`.venv-trocr`/
+# `.venv-paddleocr`) that genuinely has `surya`/`doctr`/`transformers`/
+# `paddleocr` installed. Checking them against this venv's environment
+# would be checking them against the wrong library set entirely.
+exclude = ["alembic", "app/services/ocr/isolated_runners"]
+
+# Module 05: neither package ships type stubs (or a py.typed marker) —
+# same "accepted, documented gap" treatment already given to `celery`
+# above this comment's precedent in the codebase, not a project-wide
+# strictness relaxation.
+[[tool.mypy.overrides]]
+module = [
+    "pytesseract",
+    "pytesseract.*",
+    "pymupdf",
+    "cv2",
+    "cv2.*",
+    "celery",
+    "celery.*",
+    "kombu",
+    "kombu.*",
+]
+ignore_missing_imports = true
+
+# Module 06: scikit-learn ships no py.typed marker either — identical
+# treatment to the Module 05 packages above.
+[[tool.mypy.overrides]]
+module = ["sklearn", "sklearn.*"]
+ignore_missing_imports = true
+
+# Module 07: reportlab/openpyxl ship no type stubs either — identical
+# treatment to the Module 05/06 packages above.
+[[tool.mypy.overrides]]
+module = ["reportlab", "reportlab.*", "openpyxl", "openpyxl.*"]
+ignore_missing_imports = true
+
+# Module 12: none of the six OCR SDKs ship type stubs/a py.typed marker —
+# identical treatment to the packages above. `paddleocr`/`paddle` are listed
+# even though the package is an optional extra (see `[project.optional-
+# dependencies]`) since mypy still needs to resolve the import when linting
+# `paddleocr_provider.py` in an environment where it isn't installed.
+[[tool.mypy.overrides]]
+module = [
+    "easyocr",
+    "easyocr.*",
+    "paddleocr",
+    "paddleocr.*",
+    "paddle",
+    "paddle.*",
+    "boto3",
+    "boto3.*",
+    "botocore",
+    "botocore.*",
+    "google.cloud.vision",
+    "google.cloud.vision.*",
+    "google.api_core.exceptions",
+    "google.oauth2.service_account",
+    "azure.ai.documentintelligence",
+    "azure.ai.documentintelligence.*",
+    "azure.core.credentials",
+    "azure.core.exceptions",
+    "psutil",
+]
+ignore_missing_imports = true
+
+# Step 4 milestone: sympy ships no py.typed marker — identical treatment
+# to the packages above.
+[[tool.mypy.overrides]]
+module = ["sympy", "sympy.*"]
+ignore_missing_imports = true
+
+# ==================================================
+# Pytest
+# ==================================================
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --cov=app --cov-report=term-missing --cov-report=xml"
+
+# ==================================================
+# Coverage
+# ==================================================
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/tasks/celery_app.py", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "raise NotImplementedError", "if TYPE_CHECKING:"]

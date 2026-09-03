@@ -1,0 +1,1 @@
+"""IntelliGrade backend application package."""

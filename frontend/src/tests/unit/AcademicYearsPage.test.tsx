@@ -1,0 +1,112 @@
+import { configureStore } from "@reduxjs/toolkit";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Provider } from "react-redux";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+
+import { ToastProvider } from "@/context/ToastProvider";
+import { AcademicYearsPage } from "@/pages/academic/AcademicYearsPage";
+import authReducer from "@/store/slices/authSlice";
+import institutionReducer from "@/store/slices/institutionSlice";
+import type { AcademicYear } from "@/types/academic";
+import type { Page } from "@/types/pagination";
+import type { User } from "@/types/auth";
+
+const { listMock, createMock } = vi.hoisted(() => ({ listMock: vi.fn(), createMock: vi.fn() }));
+vi.mock("@/api/academicYears", () => ({
+  academicYearsApi: {
+    list: listMock,
+    listDeleted: vi.fn(),
+    get: vi.fn(),
+    create: createMock,
+    update: vi.fn(),
+    remove: vi.fn(),
+    restore: vi.fn(),
+  },
+}));
+
+const baseUser: User = {
+  id: "user-1",
+  email: "admin@example.com",
+  username: "admin",
+  full_name: "Admin",
+  phone: null,
+  avatar_url: null,
+  timezone: "UTC",
+  language: "en",
+  preferences: {},
+  is_active: true,
+  is_verified: true,
+  roles: ["institution_admin"],
+  permissions: ["academic_years:create", "academic_years:read", "academic_years:update", "academic_years:delete"],
+  last_login_at: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+const year: AcademicYear = {
+  id: "year-1",
+  institution_id: "inst-1",
+  year_label: "2026-2027",
+  start_date: "2026-06-01",
+  end_date: "2027-05-31",
+  is_current: true,
+  status: "active",
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+function page<T>(items: T[]): Page<T> {
+  return { items, total: items.length, page: 1, page_size: 20, total_pages: 1 };
+}
+
+function renderPage() {
+  const store = configureStore({
+    reducer: { auth: authReducer, institution: institutionReducer },
+    preloadedState: {
+      auth: { user: baseUser, accessToken: "token", status: "authenticated" as const },
+      institution: { currentInstitutionId: "inst-1" },
+    },
+  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
+        <MemoryRouter>
+          <ToastProvider>
+            <AcademicYearsPage />
+          </ToastProvider>
+        </MemoryRouter>
+      </Provider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("AcademicYearsPage", () => {
+  it("lists academic years", async () => {
+    listMock.mockResolvedValueOnce(page([year]));
+    renderPage();
+    expect(await screen.findByText("2026-2027")).toBeInTheDocument();
+  });
+
+  it("creates an academic year", async () => {
+    listMock.mockResolvedValue(page([]));
+    createMock.mockResolvedValueOnce(year);
+    renderPage();
+
+    await screen.findByText("No academic years found.");
+    await userEvent.click(screen.getByRole("button", { name: "New Academic Year" }));
+    await userEvent.type(screen.getByLabelText(/^Year Label/), "2026-2027");
+    await userEvent.type(screen.getByLabelText(/^Start Date/), "2026-06-01");
+    await userEvent.type(screen.getByLabelText(/^End Date/), "2027-05-31");
+    await userEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({ year_label: "2026-2027", start_date: "2026-06-01", end_date: "2027-05-31" }),
+      ),
+    );
+  });
+});

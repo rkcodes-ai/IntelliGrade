@@ -1,0 +1,240 @@
+# IntelliGrade PRODUCTION stack (Module 08).
+#
+# Differences from docker-compose.yml (local dev):
+#   - Every image builds its `production`/`worker` target, not `development`
+#     — no bind-mounted source, no hot reload, non-root users throughout.
+#   - A `worker` service (Celery) is added — dev relies on running a worker
+#     manually/ad hoc; production always needs one.
+#   - A top-level `nginx` reverse proxy terminates 80/443, proxies `/` to
+#     the frontend's static-file container and `/api`+`/health`+`/metrics`
+#     to the backend — see nginx/README.md.
+#   - Two networks (`edge`, `internal`) instead of one flat network: only
+#     nginx/frontend/backend sit on `edge`; postgres/redis/minio/worker are
+#     never reachable from outside the `internal` network at all (backend
+#     bridges both). Defense in depth — even a compromised frontend
+#     container has no network path to the database.
+#   - No host port publishing for postgres/redis/minio — only nginx
+#     publishes 80/443 (see the `ports:` on the `nginx` service). Every
+#     other service is reachable only from other containers on the same
+#     Compose network.
+#   - `restart: always` (vs dev's `unless-stopped`) and `deploy.resources`
+#     limits are set on every service, matching the sizing guidance in
+#     docs/production-checklist.md — tune these for your actual hardware
+#     before relying on them.
+#
+# Usage:
+#   cp .env.production.example .env.production   # fill in REAL secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# See docs/deployment-guide.md for the full release checklist and
+# docs/production-checklist.md before running this against real traffic.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intelligrade-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups/postgres:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+
+  redis:
+    image: redis:7-alpine
+    container_name: intelligrade-redis
+    restart: always
+    # `--requirepass` (not set in the dev compose) so a real deployment's
+    # Celery broker/rate-limit/cache traffic can't be read or flooded by
+    # anything else that reaches the `internal` network.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  minio:
+    image: minio/minio:latest
+    container_name: intelligrade-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    image: intelligrade-backend:${IMAGE_TAG:-latest}
+    container_name: intelligrade-backend
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - edge
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+
+  worker:
+    build:
+      context: ./backend
+      target: worker
+    image: intelligrade-backend-worker:${IMAGE_TAG:-latest}
+    container_name: intelligrade-worker
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    image: intelligrade-frontend:${IMAGE_TAG:-latest}
+    container_name: intelligrade-frontend
+    restart: always
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - edge
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: intelligrade-nginx
+    restart: always
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - edge
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: false # set true once every image/service that needs outbound
+    # internet access (e.g. pulling a package at runtime) is confirmed to
+    # need none — kept reachable for now so `docker compose pull`-style
+    # health-check tooling and DNS resolution behave predictably; see
+    # docs/production-checklist.md.
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  nginx_cache:

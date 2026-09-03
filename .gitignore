@@ -1,0 +1,145 @@
+# ==================================================
+# IntelliGrade - Root .gitignore
+# ==================================================
+
+# --- Environment & secrets ---
+.env
+.env.*
+**/.env
+**/.env.*
+!/.env.example
+!/backend/.env.example
+!/frontend/.env.example
+!/.env.production.example
+*.pem
+*.key
+!nginx/certs/.gitkeep
+!nginx/certs/README.md
+secrets/
+**/secrets/
+
+
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.venv-*/
+
+# --- Isolated runtime assets (Step 4/4.1/4.2 milestones) ---
+# LanguageTool's local JAR distribution (~390MB) -- downloaded from
+# https://languagetool.org/download/LanguageTool-stable.zip, never
+# committed; see backend/docs/language-quality-setup.md.
+backend/.languagetool/
+# fastText lid.176 language-identification model (~938KB) -- downloaded
+# from https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz,
+# never committed; see backend/docs/multilingual-setup.md.
+backend/.langid-models/
+# Qwen2.5-1.5B-Instruct GGUF (~1.1GB) -- downloaded from the official
+# https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF repository,
+# never committed; used by the local AI Reference Answer Builder.
+backend/.reference-ai-models/
+# Tesseract Indian-language .traineddata packs (Step 4.2 milestone) --
+# downloaded from the official tesseract-ocr/tessdata_fast repo, never
+# committed (oversight-fixed: this was missing from Step 4.2's own
+# .gitignore additions).
+backend/.tessdata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+celerybeat-schedule
+celerybeat.pid
+
+# --- Node / frontend ---
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.local
+
+# --- IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker/**/data/
+
+# --- Logs ---
+logs/*
+!logs/.gitkeep
+*.log
+
+# --- Uploads / backups (runtime artifacts, never committed) ---
+uploads/*
+!uploads/.gitkeep
+backups/*
+!backups/.gitkeep
+!backups/postgres/
+!backups/postgres/.gitkeep
+!backups/minio/
+!backups/minio/.gitkeep
+
+# --- Husky (generated shim dir; .husky/commit-msg itself is tracked) ---
+.husky/_/
+
+# --- Build artifacts ---
+build/
+*.egg
+
+# --- Runtime storage & Redis dumps ---
+storage/*
+!storage/.gitkeep
+dump.rdb
+*.rdb
+
+# --- Datasets & student examination data (private, never committed) ---
+A Dataset of Digitized Student Examination Papers*/
+*Dataset*/
+model_test_run_output.json
+run_model_test_on_dataset.py
+export_demo_json.py
+
+# --- Scratch, ad-hoc maintenance scripts & test artifacts ---
+scratch/
+scratch_*
+backend/scratch_*
+backend/set_superadmin_password.py
+backend/inspect_db.py
+backend/verify_minio.py
+
+# --- Local IDEs & agent worktrees ---
+.claude/
+
+# --- Ephemeral sandbox validation reports (local testing artifacts) ---
+docs/archive-reports/
+*VERIFICATION_REPORT*.md
+*VALIDATION_REPORT*.md
+*DEPLOYMENT_REPORT*.md
+*DEPLOYMENT_CHECKLIST*.md
+*DEPLOYMENT_SUMMARY*.md
+*CERTIFICAT*.md
+*READINESS_REPORT*.md
+*RUNTIME_*.md
+STARTUP_LOGS.md
+UAT_REPORT.md
+PERFORMANCE_SUMMARY.md
+

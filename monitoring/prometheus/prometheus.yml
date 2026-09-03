@@ -1,0 +1,31 @@
+# Prometheus scrape configuration (Module 08).
+#
+# Scrapes the backend's real `/metrics` endpoint (exposed via
+# `prometheus-fastapi-instrumentator`, wired in `backend/app/main.py`) —
+# request counts/latency histograms/in-progress gauge, labeled by
+# method+handler+status. Run alongside the production stack via:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml \
+#     --env-file .env.production up -d
+#
+# (a separate overlay file, not merged into docker-compose.prod.yml itself,
+# so a deployment can run Prometheus/Grafana on a different host/schedule
+# without touching the app stack's compose file).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    application: intelligrade
+
+scrape_configs:
+  - job_name: intelligrade-backend
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: backend
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

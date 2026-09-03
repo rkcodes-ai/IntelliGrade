@@ -1,0 +1,39 @@
+# Automated dependency-update PRs (Module 08, Feature 12: dependency
+# scanning). Dependabot opens a PR for each outdated/vulnerable dependency
+# it finds — normal CI (lint.yml/test.yml/build.yml) then runs against
+# that PR like any other, so an update that breaks something is caught
+# before merge, not after.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      npm-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

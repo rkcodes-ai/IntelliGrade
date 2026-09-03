@@ -1,0 +1,51 @@
+name: Docker
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  validate-compose:
+    name: Validate docker-compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create placeholder .env
+        run: cp .env.example .env
+
+      - name: docker compose config
+        run: docker compose config --quiet
+
+  build-images:
+    name: Build backend & frontend images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: backend
+            context: ./backend
+            dockerfile: backend/Dockerfile
+          # Frontend needs repo-root context: it's an npm-workspaces
+          # monorepo and package-lock.json lives at the root, not inside
+          # frontend/ — see the comment at the top of frontend/Dockerfile.
+          - service: frontend
+            context: .
+            dockerfile: frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} (production target)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          target: production
+          push: false
+          tags: intelligrade-${{ matrix.service }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
