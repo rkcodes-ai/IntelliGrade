@@ -10,7 +10,7 @@
 # ============================================================
 # Dependencies (root-scoped: only the frontend workspace's deps)
 # ============================================================
-FROM node:20-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY frontend/package.json ./frontend/package.json
@@ -25,7 +25,7 @@ RUN npm ci --workspace=frontend
 # ============================================================
 # Development image (Vite dev server, hot reload)
 # ============================================================
-FROM node:20-alpine AS development
+FROM node:25-alpine AS development
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ ./frontend/
